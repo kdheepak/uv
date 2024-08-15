@@ -1199,15 +1199,86 @@ impl MarkerTree {
 
 impl fmt::Debug for MarkerTree {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        if self.is_true() {
-            return write!(f, "true");
+        self.fmt_indented(f, 0)
+    }
+}
+
+impl MarkerTree {
+    // Formats a [`MarkerTree`] as a graph.
+    fn fmt_indented(&self, f: &mut fmt::Formatter<'_>, level: usize) -> fmt::Result {
+        match self.kind() {
+            MarkerTreeKind::True => return write!(f, "true"),
+            MarkerTreeKind::False => return write!(f, "false"),
+            MarkerTreeKind::Version(kind) => {
+                for (tree, range) in simplify::collect_edges(kind.edges()) {
+                    writeln!(f)?;
+                    for _ in 0..level {
+                        write!(f, "  ")?;
+                    }
+
+                    write!(f, "{key}{range} -> ", key = kind.key())?;
+                    tree.fmt_indented(f, level + 1)?;
+                }
+            }
+            MarkerTreeKind::String(kind) => {
+                for (tree, range) in simplify::collect_edges(kind.children()) {
+                    writeln!(f)?;
+                    for _ in 0..level {
+                        write!(f, "  ")?;
+                    }
+
+                    write!(f, "{key}{range} -> ", key = kind.key())?;
+                    tree.fmt_indented(f, level + 1)?;
+                }
+            }
+            MarkerTreeKind::In(kind) => {
+                writeln!(f)?;
+                for _ in 0..level {
+                    write!(f, "  ")?;
+                }
+                write!(f, "{} in {} -> ", kind.key(), kind.value())?;
+                kind.edge(true).fmt_indented(f, level + 1)?;
+
+                writeln!(f)?;
+                for _ in 0..level {
+                    write!(f, "  ")?;
+                }
+                write!(f, "{} not in {} -> ", kind.key(), kind.value())?;
+                kind.edge(false).fmt_indented(f, level + 1)?;
+            }
+            MarkerTreeKind::Contains(kind) => {
+                writeln!(f)?;
+                for _ in 0..level {
+                    write!(f, "  ")?;
+                }
+                write!(f, "{} in {} -> ", kind.value(), kind.key())?;
+                kind.edge(true).fmt_indented(f, level + 1)?;
+
+                writeln!(f)?;
+                for _ in 0..level {
+                    write!(f, "  ")?;
+                }
+                write!(f, "{} in {} -> ", kind.value(), kind.key())?;
+                kind.edge(false).fmt_indented(f, level + 1)?;
+            }
+            MarkerTreeKind::Extra(kind) => {
+                writeln!(f)?;
+                for _ in 0..level {
+                    write!(f, "  ")?;
+                }
+                write!(f, "extra == {} -> ", kind.name())?;
+                kind.edge(true).fmt_indented(f, level + 1)?;
+
+                writeln!(f)?;
+                for _ in 0..level {
+                    write!(f, "  ")?;
+                }
+                write!(f, "extra == {} -> ", kind.name())?;
+                kind.edge(false).fmt_indented(f, level + 1)?;
+            }
         }
 
-        if self.is_false() {
-            return write!(f, "false");
-        }
-
-        write!(f, "{}", self.contents().unwrap())
+        Ok(())
     }
 }
 
