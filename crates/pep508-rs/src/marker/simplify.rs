@@ -285,25 +285,26 @@ pub(crate) fn collect_edges<'a, T>(
 where
     T: Ord + Clone + 'a,
 {
-    let len = map.len();
+    let _len = map.len();
 
     let mut paths: IndexMap<_, Range<_>, FxBuildHasher> = IndexMap::default();
-    for (i, (range, tree)) in map.enumerate() {
-        let (mut start, mut end) = range.bounding_range().unwrap();
-        match (start, end) {
-            (Bound::Included(v1), Bound::Included(v2)) if v1 == v2 => {}
-            _ => {
-                // Expand the range of this variable to be unbounded.
-                // This helps remove redundant expressions such as `python_version >= '3.7'`
-                // when the range has already been restricted to `['3.7', inf)`
-                if i == 0 {
-                    start = Bound::Unbounded;
-                }
-                if i == len - 1 {
-                    end = Bound::Unbounded;
-                }
-            }
-        }
+    for (_i, (range, tree)) in map.enumerate() {
+        let (start, end) = range.bounding_range().unwrap();
+        // let (mut start, mut end) = range.bounding_range().unwrap();
+        // match (start, end) {
+        // (Bound::Included(v1), Bound::Included(v2)) if v1 == v2 => {}
+        // _ => {
+        // // Expand the range of this variable to be unbounded.
+        // // This helps remove redundant expressions such as `python_version >= '3.7'`
+        // // when the range has already been restricted to `['3.7', inf)`
+        // if _i == 0 {
+        // start = Bound::Unbounded;
+        // }
+        // if _i == _len - 1 {
+        // end = Bound::Unbounded;
+        // }
+        // }
+        // }
 
         // Combine the ranges.
         let range = Range::from_range_bounds((start.cloned(), end.cloned()));

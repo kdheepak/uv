@@ -1153,6 +1153,36 @@ impl MarkerTree {
         }))
     }
 
+    /// TODO
+    #[must_use]
+    #[allow(clippy::needless_pass_by_value)]
+    pub fn complexify_python_versions(
+        self,
+        lower: Bound<&Version>,
+        upper: Bound<&Version>,
+    ) -> MarkerTree {
+        MarkerTree(
+            INTERNER
+                .lock()
+                .complexify_python_versions(self.0, lower, upper),
+        )
+    }
+
+    /// TODO
+    #[must_use]
+    #[allow(clippy::needless_pass_by_value)]
+    pub fn simplify_python_versions2(
+        self,
+        lower: &Bound<Version>,
+        upper: &Bound<Version>,
+    ) -> MarkerTree {
+        MarkerTree(
+            INTERNER
+                .lock()
+                .simplify_python_versions(self.0, lower, upper),
+        )
+    }
+
     /// Remove the extras from a marker, returning `None` if the marker tree evaluates to `true`.
     ///
     /// Any `extra` markers that are always `true` given the provided extras will be removed.
@@ -1199,12 +1229,23 @@ impl MarkerTree {
 
 impl fmt::Debug for MarkerTree {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        self.fmt_indented(f, 0)
+        if f.alternate() {
+            self.fmt_indented(f, 0)
+        } else {
+            if self.is_true() {
+                return write!(f, "true");
+            }
+            if self.is_false() {
+                return write!(f, "false");
+            }
+            write!(f, "{}", self.contents().unwrap())
+        }
     }
 }
 
 impl MarkerTree {
     // Formats a [`MarkerTree`] as a graph.
+    #[allow(dead_code)]
     fn fmt_indented(&self, f: &mut fmt::Formatter<'_>, level: usize) -> fmt::Result {
         match self.kind() {
             MarkerTreeKind::True => return write!(f, "true"),
@@ -2757,5 +2798,170 @@ mod test {
     fn is_disjoint(left: impl AsRef<str>, right: impl AsRef<str>) -> bool {
         let (left, right) = (m(left.as_ref()), m(right.as_ref()));
         left.is_disjoint(&right) && right.is_disjoint(&left)
+    }
+
+    #[test]
+    fn scratch1() {
+        let marker_rp = m("python_full_version >= '3.8'");
+
+        let m = m("python_full_version < '3.10'");
+        println!("{m:?}");
+        println!("{m:#?}");
+        println!("---------------------------------");
+
+        let rp =
+            Range::from_range_bounds((Bound::Included(Version::new([3, 8])), Bound::Unbounded));
+        let simplified = m.clone().simplify_python_versions(rp);
+        println!("{simplified:?}");
+        println!("{simplified:#?}");
+        println!("---------------------------------");
+        let parsed = simplified
+            .try_to_string()
+            .unwrap()
+            .parse::<MarkerTree>()
+            .unwrap();
+        println!("{parsed:?}");
+        println!("{parsed:#?}");
+        println!("---------------------------------");
+
+        let mut m = m.clone();
+        m.and(marker_rp);
+        println!("{m:?}");
+        println!("{m:#?}");
+        println!("---------------------------------");
+    }
+
+    #[test]
+    fn scratch2() {
+        let rp =
+            Range::from_range_bounds((Bound::Included(Version::new([3, 8])), Bound::Unbounded));
+        // let m = m(
+        // "python_full_version >= '3.8' and python_full_version < '3.10' and sys_platform == 'Linux'",
+        // );
+        let m = m("python_full_version >= '3.8' and python_full_version < '3.10'");
+        println!("{m:?}");
+        println!("{m:#?}");
+        println!("~~~~~~~~~~~~~~~~~~~~~");
+        let simplified = m.clone().simplify_python_versions(rp);
+        println!("{simplified:?}");
+        println!("{simplified:#?}");
+    }
+
+    #[test]
+    fn scratch3() {
+        let rp = (Bound::Included(Version::new([3, 8])), Bound::Unbounded);
+        let m = m("python_full_version < '3.10'");
+        println!("{m:?}");
+        println!("{m:#?}");
+        println!("~~~~~~~~~~~~~~~~~~~~~");
+        let complexified = m
+            .clone()
+            .complexify_python_versions(rp.0.as_ref(), rp.1.as_ref());
+        println!("{complexified:?}");
+        println!("{complexified:#?}");
+    }
+
+    #[test]
+    fn scratch4() {
+        let rp =
+            Range::from_range_bounds((Bound::Included(Version::new([3, 8])), Bound::Unbounded));
+        // let m = m(
+        // "python_full_version >= '3.8' and python_full_version < '3.10' and sys_platform == 'Linux'",
+        // );
+        let m = m("python_full_version >= '3.9'");
+        println!("{m:?}");
+        println!("{m:#?}");
+        println!("~~~~~~~~~~~~~~~~~~~~~");
+        let simplified = m.clone().simplify_python_versions(rp);
+        println!("{simplified:?}");
+        println!("{simplified:#?}");
+    }
+
+    #[test]
+    fn complexified_markers() {
+        // Takes optional lower (inclusive) and upper (exclusive)
+        // bounds representing `requires-python` and a "simplified"
+        // marker, and returns the "complexified" marker. That is, a
+        // marker that embeds the `requires-python` constraint into it.
+        let complexify =
+            |lower: Option<[u64; 2]>, upper: Option<[u64; 2]>, marker: &str| -> MarkerTree {
+                let lower = lower
+                    .map(|release| Bound::Included(Version::new(release)))
+                    .unwrap_or(Bound::Unbounded);
+                let upper = upper
+                    .map(|release| Bound::Excluded(Version::new(release)))
+                    .unwrap_or(Bound::Unbounded);
+                m(marker).complexify_python_versions(lower.as_ref(), upper.as_ref())
+            };
+
+        assert_eq!(
+            complexify(None, None, "python_full_version < '3.10'"),
+            m("python_full_version < '3.10'"),
+        );
+        assert_eq!(
+            complexify(Some([3, 8]), None, "python_full_version < '3.10'"),
+            m("python_full_version >= '3.8' and python_full_version < '3.10'"),
+        );
+        assert_eq!(
+            complexify(None, Some([3, 8]), "python_full_version < '3.10'"),
+            m("python_full_version < '3.8'"),
+        );
+        assert_eq!(
+            complexify(Some([3, 8]), Some([3, 8]), "python_full_version < '3.10'"),
+            // Kinda weird, but this normalizes to `false`, just like the above.
+            m("python_full_version < '0' and python_full_version > '0'"),
+        );
+
+        assert_eq!(
+            complexify(Some([3, 11]), None, "python_full_version < '3.10'"),
+            // Kinda weird, but this normalizes to `false`, just like the above.
+            m("python_full_version < '0' and python_full_version > '0'"),
+        );
+        assert_eq!(
+            complexify(Some([3, 11]), None, "python_full_version >= '3.10'"),
+            m("python_full_version >= '3.11'"),
+        );
+        assert_eq!(
+            complexify(Some([3, 11]), None, "python_full_version >= '3.12'"),
+            m("python_full_version >= '3.12'"),
+        );
+
+        assert_eq!(
+            complexify(None, Some([3, 11]), "python_full_version > '3.12'"),
+            // Kinda weird, but this normalizes to `false`, just like the above.
+            m("python_full_version < '0' and python_full_version > '0'"),
+        );
+        assert_eq!(
+            complexify(None, Some([3, 11]), "python_full_version <= '3.12'"),
+            m("python_full_version < '3.11'"),
+        );
+        assert_eq!(
+            complexify(None, Some([3, 11]), "python_full_version <= '3.10'"),
+            m("python_full_version <= '3.10'"),
+        );
+
+        assert_eq!(
+            complexify(Some([3, 11]), None, "python_full_version == '3.8'"),
+            // Kinda weird, but this normalizes to `false`, just like the above.
+            m("python_full_version < '0' and python_full_version > '0'"),
+        );
+        assert_eq!(
+            complexify(
+                Some([3, 11]),
+                None,
+                "python_full_version == '3.8' or python_full_version == '3.12'"
+            ),
+            m("python_full_version == '3.12'"),
+        );
+        assert_eq!(
+            complexify(
+                Some([3, 11]),
+                None,
+                "python_full_version == '3.8' \
+                 or python_full_version == '3.11' \
+                 or python_full_version == '3.12'"
+            ),
+            m("python_full_version == '3.11' or python_full_version == '3.12'"),
+        );
     }
 }
