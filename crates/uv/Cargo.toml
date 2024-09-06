@@ -34,6 +34,7 @@ uv-fs = { workspace = true }
 uv-git = { workspace = true }
 uv-installer = { workspace = true }
 uv-normalize = { workspace = true }
+uv-publish = { workspace = true }
 uv-python = { workspace = true, features = ["schemars"]}
 uv-requirements = { workspace = true }
 uv-resolver = { workspace = true }
@@ -78,6 +79,7 @@ tracing-tree = { workspace = true }
 unicode-width = { workspace = true }
 url = { workspace = true }
 which = { workspace = true }
+glob.workspace = true
 
 [target.'cfg(target_os = "windows")'.dependencies]
 mimalloc = { version = "0.1.39" }

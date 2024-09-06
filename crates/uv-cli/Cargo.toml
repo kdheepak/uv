@@ -33,6 +33,7 @@ clap = { workspace = true, features = ["derive", "string"] }
 clap_complete_command = { workspace = true }
 serde = { workspace = true }
 url = { workspace = true }
+glob.workspace = true
 
 [dev-dependencies]
 insta = { version = "1.36.1", features = ["filters", "json"] }

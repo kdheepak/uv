@@ -1,10 +1,10 @@
 use std::path::{Path, PathBuf};
 
+use crate::Error;
 use distribution_filename::WheelFilename;
 use distribution_types::{CachedDist, Dist, Hashed};
 use pypi_types::{HashDigest, Metadata23};
-
-use crate::Error;
+use uv_metadata::read_flat_wheel_metadata;
 
 /// A locally available wheel.
 #[derive(Debug, Clone)]
@@ -38,7 +38,8 @@ impl LocalWheel {
 
     /// Read the [`Metadata23`] from a wheel.
     pub fn metadata(&self) -> Result<Metadata23, Error> {
-        read_flat_wheel_metadata(&self.filename, &self.archive)
+        Ok(read_flat_wheel_metadata(&self.filename, &self.archive)
+            .map_err(|err| Error::WheelMetadata(self.archive.clone(), err))?)
     }
 }
 
@@ -59,14 +60,4 @@ impl std::fmt::Display for LocalWheel {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.remote())
     }
-}
-
-/// Read the [`Metadata23`] from an unzipped wheel.
-fn read_flat_wheel_metadata(
-    filename: &WheelFilename,
-    wheel: impl AsRef<Path>,
-) -> Result<Metadata23, Error> {
-    let dist_info = install_wheel_rs::metadata::find_flat_dist_info(filename, &wheel)?;
-    let metadata = install_wheel_rs::metadata::read_dist_info_metadata(&dist_info, &wheel)?;
-    Ok(Metadata23::parse_metadata(&metadata)?)
 }

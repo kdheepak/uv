@@ -71,6 +71,7 @@ mod cached;
 mod diagnostic;
 mod error;
 mod file;
+mod file_metadata;
 mod hash;
 mod id;
 mod index_url;
